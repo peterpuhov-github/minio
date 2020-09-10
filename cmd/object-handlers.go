@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/xml"
@@ -379,25 +380,29 @@ func (api objectAPIHandlers) GetCustomObjectContentHandler(w http.ResponseWriter
 		return
 	}
 
-	getObjectNInfo := objectAPI.GetObjectNInfo
-	if api.CacheAPI() != nil {
-		getObjectNInfo = api.CacheAPI().GetObjectNInfo
-	}
-
-	getObject := func(offset, length int64) (rc io.ReadCloser, err error) {
-		isSuffixLength := false
-		if offset < 0 {
-			isSuffixLength = true
+	/*
+		getObjectNInfo := objectAPI.GetObjectNInfo
+		if api.CacheAPI() != nil {
+			getObjectNInfo = api.CacheAPI().GetObjectNInfo
 		}
+	*/
 
-		rs := &HTTPRangeSpec{
-			IsSuffixLength: isSuffixLength,
-			Start:          offset,
-			End:            offset + length,
+	/*
+		getObject := func(offset, length int64) (rc io.ReadCloser, err error) {
+			isSuffixLength := false
+			if offset < 0 {
+				isSuffixLength = true
+			}
+
+			rs := &HTTPRangeSpec{
+				IsSuffixLength: isSuffixLength,
+				Start:          offset,
+				End:            offset + length,
+			}
+
+			return getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock, ObjectOptions{})
 		}
-
-		return getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock, ObjectOptions{})
-	}
+	*/
 
 	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
@@ -426,44 +431,44 @@ func (api objectAPIHandlers) GetCustomObjectContentHandler(w http.ResponseWriter
 			return
 		}
 	}
-
-	s3Select, err := s3select.NewS3Select(r.Body)
-	if err != nil {
-		if serr, ok := err.(s3select.SelectError); ok {
-			encodedErrorResponse := encodeResponse(APIErrorResponse{
-				Code:       serr.ErrorCode(),
-				Message:    serr.ErrorMessage(),
-				BucketName: bucket,
-				Key:        object,
-				Resource:   r.URL.Path,
-				RequestID:  w.Header().Get(xhttp.AmzRequestID),
-				HostID:     globalDeploymentID,
-			})
-			writeResponse(w, serr.HTTPStatusCode(), encodedErrorResponse, mimeXML)
-		} else {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+	/*
+		s3Select, err := s3select.NewS3Select(r.Body)
+		if err != nil {
+			if serr, ok := err.(s3select.SelectError); ok {
+				encodedErrorResponse := encodeResponse(APIErrorResponse{
+					Code:       serr.ErrorCode(),
+					Message:    serr.ErrorMessage(),
+					BucketName: bucket,
+					Key:        object,
+					Resource:   r.URL.Path,
+					RequestID:  w.Header().Get(xhttp.AmzRequestID),
+					HostID:     globalDeploymentID,
+				})
+				writeResponse(w, serr.HTTPStatusCode(), encodedErrorResponse, mimeXML)
+			} else {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			}
+			return
 		}
-		return
-	}
 
-	if err = s3Select.Open(getObject); err != nil {
-		if serr, ok := err.(s3select.SelectError); ok {
-			encodedErrorResponse := encodeResponse(APIErrorResponse{
-				Code:       serr.ErrorCode(),
-				Message:    serr.ErrorMessage(),
-				BucketName: bucket,
-				Key:        object,
-				Resource:   r.URL.Path,
-				RequestID:  w.Header().Get(xhttp.AmzRequestID),
-				HostID:     globalDeploymentID,
-			})
-			writeResponse(w, serr.HTTPStatusCode(), encodedErrorResponse, mimeXML)
-		} else {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		if err = s3Select.Open(getObject); err != nil {
+			if serr, ok := err.(s3select.SelectError); ok {
+				encodedErrorResponse := encodeResponse(APIErrorResponse{
+					Code:       serr.ErrorCode(),
+					Message:    serr.ErrorMessage(),
+					BucketName: bucket,
+					Key:        object,
+					Resource:   r.URL.Path,
+					RequestID:  w.Header().Get(xhttp.AmzRequestID),
+					HostID:     globalDeploymentID,
+				})
+				writeResponse(w, serr.HTTPStatusCode(), encodedErrorResponse, mimeXML)
+			} else {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			}
+			return
 		}
-		return
-	}
-
+	*/
 	// Set encryption response headers
 	if objectAPI.IsEncryptionSupported() {
 		if crypto.IsEncrypted(objInfo.UserDefined) {
@@ -482,8 +487,36 @@ func (api objectAPIHandlers) GetCustomObjectContentHandler(w http.ResponseWriter
 		}
 	}
 
-	s3Select.Evaluate(w)
-	s3Select.Close()
+	// s3Select.Evaluate(w)
+	// s3Select.Close()
+
+	//w.WriteHeader(http.StatusOK)
+	//writeResponse(w, http.StatusOK, nil, mimeNone)
+
+	/*
+		resp := encodeResponse(PostResponse{
+			Bucket:   objInfo.Bucket,
+			Key:      objInfo.Name,
+			ETag:     `"` + objInfo.ETag + `"`,
+			Location: w.Header().Get(xhttp.Location),
+		})
+		writeResponse(w, http.StatusOK, resp, mimeXML)
+	*/
+
+	writer := s3select.NewMessageWriter(w)
+
+	buf := new(bytes.Buffer)
+	buf.Reset()
+	//buf.WriteString("OK\n")
+	buf.WriteString("Bucket: " + objInfo.Bucket + "\n")
+	buf.WriteString("Key: " + objInfo.Name + "\n")
+	buf.WriteString("ETag: " + objInfo.ETag + "\n")
+	buf.WriteString("Request: ")
+	buf.ReadFrom(r.Body)
+	buf.WriteString("\n")
+
+	writer.SendRecord(buf)
+	writer.Finish(-1, -1)
 
 	// Notify object accessed via a GET request.
 	sendEvent(eventArgs{
