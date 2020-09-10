@@ -430,3 +430,8 @@ func newMessageWriter(w http.ResponseWriter, getProgressFunc func() (bytesScanne
 	go writer.start()
 	return writer
 }
+
+// export this function
+func NewMessageWriter(w http.ResponseWriter) *messageWriter {
+	return newMessageWriter(w, nil)
+}
