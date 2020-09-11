@@ -57,8 +57,11 @@ func commitID() string {
 		commit []byte
 		e      error
 	)
-	cmdName := "git"
-	cmdArgs := []string{"log", "--format=%H", "-n1"}
+	//cmdName := "git"
+	//cmdArgs := []string{"log", "--format=%H", "-n1"}
+	cmdName := "cat"
+	cmdArgs := []string{"commit_hash"}
+
 	if commit, e = exec.Command(cmdName, cmdArgs...).Output(); e != nil {
 		fmt.Fprintln(os.Stderr, "Error generating git commit-id: ", e)
 		os.Exit(1)
