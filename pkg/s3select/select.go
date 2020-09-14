@@ -244,6 +244,12 @@ func (s3Select *S3Select) UnmarshalXML(d *xml.Decoder, start xml.StartElement) e
 	}
 
 	parsedS3Select.ExpressionType = strings.ToLower(parsedS3Select.ExpressionType)
+
+	if parsedS3Select.ExpressionType == "custom" {
+		*s3Select = S3Select(parsedS3Select)
+		return nil
+	}
+
 	if parsedS3Select.ExpressionType != "sql" {
 		return errInvalidExpressionType(fmt.Errorf("invalid expression type '%v'", parsedS3Select.ExpressionType))
 	}
@@ -545,4 +551,9 @@ func NewS3Select(r io.Reader) (*S3Select, error) {
 	}
 
 	return s3Select, nil
+}
+
+// GetExpression - getter
+func (s3Select *S3Select) GetExpression() string {
+	return s3Select.Expression
 }
