@@ -431,26 +431,26 @@ func (api objectAPIHandlers) GetCustomObjectContentHandler(w http.ResponseWriter
 			return
 		}
 	}
-	/*
-		s3Select, err := s3select.NewS3Select(r.Body)
-		if err != nil {
-			if serr, ok := err.(s3select.SelectError); ok {
-				encodedErrorResponse := encodeResponse(APIErrorResponse{
-					Code:       serr.ErrorCode(),
-					Message:    serr.ErrorMessage(),
-					BucketName: bucket,
-					Key:        object,
-					Resource:   r.URL.Path,
-					RequestID:  w.Header().Get(xhttp.AmzRequestID),
-					HostID:     globalDeploymentID,
-				})
-				writeResponse(w, serr.HTTPStatusCode(), encodedErrorResponse, mimeXML)
-			} else {
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-			}
-			return
-		}
 
+	s3Select, err := s3select.NewS3Select(r.Body)
+	if err != nil {
+		if serr, ok := err.(s3select.SelectError); ok {
+			encodedErrorResponse := encodeResponse(APIErrorResponse{
+				Code:       serr.ErrorCode(),
+				Message:    serr.ErrorMessage(),
+				BucketName: bucket,
+				Key:        object,
+				Resource:   r.URL.Path,
+				RequestID:  w.Header().Get(xhttp.AmzRequestID),
+				HostID:     globalDeploymentID,
+			})
+			writeResponse(w, serr.HTTPStatusCode(), encodedErrorResponse, mimeXML)
+		} else {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		}
+		return
+	}
+	/*
 		if err = s3Select.Open(getObject); err != nil {
 			if serr, ok := err.(s3select.SelectError); ok {
 				encodedErrorResponse := encodeResponse(APIErrorResponse{
@@ -511,8 +511,12 @@ func (api objectAPIHandlers) GetCustomObjectContentHandler(w http.ResponseWriter
 	buf.WriteString("Bucket: " + objInfo.Bucket + "\n")
 	buf.WriteString("Key: " + objInfo.Name + "\n")
 	buf.WriteString("ETag: " + objInfo.ETag + "\n")
-	buf.WriteString("Request: ")
-	buf.ReadFrom(r.Body)
+	//buf.WriteString("Request: ")
+	//buf.ReadFrom(r.Body)
+
+	buf.WriteString("Expression: " + s3Select.GetExpression() + "\n")
+	//buf.WriteString("ExpressionType: " + s3select.ExpressionType + "\n")
+
 	buf.WriteString("\n")
 
 	writer.SendRecord(buf)
