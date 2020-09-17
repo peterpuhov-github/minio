@@ -23,7 +23,9 @@ import (
 	"encoding/hex"
 	"encoding/xml"
 	"io"
+	"io/ioutil"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"sort"
 	"strconv"
@@ -50,7 +52,8 @@ import (
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/hash"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
-	"github.com/minio/minio/pkg/ioutil"
+
+	minioutil "github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/s3select"
 	"github.com/minio/sio"
 )
@@ -432,6 +435,10 @@ func (api objectAPIHandlers) GetCustomObjectContentHandler(w http.ResponseWriter
 		}
 	}
 
+	body := new(bytes.Buffer)
+	body.ReadFrom(r.Body)
+	r.Body = ioutil.NopCloser(strings.NewReader(body.String()))
+
 	s3Select, err := s3select.NewS3Select(r.Body)
 	if err != nil {
 		if serr, ok := err.(s3select.SelectError); ok {
@@ -511,13 +518,26 @@ func (api objectAPIHandlers) GetCustomObjectContentHandler(w http.ResponseWriter
 	buf.WriteString("Bucket: " + objInfo.Bucket + "\n")
 	buf.WriteString("Key: " + objInfo.Name + "\n")
 	buf.WriteString("ETag: " + objInfo.ETag + "\n")
-	//buf.WriteString("Request: ")
 	//buf.ReadFrom(r.Body)
+	buf.WriteString("Request: " + body.String() + "\n")
 
 	buf.WriteString("Expression: " + s3Select.GetExpression() + "\n")
 	//buf.WriteString("ExpressionType: " + s3select.ExpressionType + "\n")
 
 	buf.WriteString("\n")
+
+	r.Body = ioutil.NopCloser(strings.NewReader(body.String()))
+
+	dump, _ := httputil.DumpRequest(r, true)
+	buf.WriteString(string(dump))
+
+	//var dump = &bytes.Buffer{}
+	//r.Body = ioutil.NopCloser(strings.NewReader(body.String()))
+	//r.Write(dump)
+	//buf.WriteString(dump.String())
+
+	buf.WriteString("\n")
+	//buf.WriteString("End\n")
 
 	writer.SendRecord(buf)
 	writer.Finish(-1, -1)
@@ -700,7 +720,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	setHeadGetRespHeaders(w, r.URL.Query())
 
 	statusCodeWritten := false
-	httpWriter := ioutil.WriteOnClose(w)
+	httpWriter := minioutil.WriteOnClose(w)
 	if rs != nil {
 		statusCodeWritten = true
 		w.WriteHeader(http.StatusPartialContent)
