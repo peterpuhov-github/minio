@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
@@ -439,24 +440,26 @@ func (api objectAPIHandlers) GetCustomObjectContentHandler(w http.ResponseWriter
 	body.ReadFrom(r.Body)
 	r.Body = ioutil.NopCloser(strings.NewReader(body.String()))
 
-	s3Select, err := s3select.NewS3Select(r.Body)
-	if err != nil {
-		if serr, ok := err.(s3select.SelectError); ok {
-			encodedErrorResponse := encodeResponse(APIErrorResponse{
-				Code:       serr.ErrorCode(),
-				Message:    serr.ErrorMessage(),
-				BucketName: bucket,
-				Key:        object,
-				Resource:   r.URL.Path,
-				RequestID:  w.Header().Get(xhttp.AmzRequestID),
-				HostID:     globalDeploymentID,
-			})
-			writeResponse(w, serr.HTTPStatusCode(), encodedErrorResponse, mimeXML)
-		} else {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+	/*
+		s3Select, err := s3select.NewS3Select(r.Body)
+		if err != nil {
+			if serr, ok := err.(s3select.SelectError); ok {
+				encodedErrorResponse := encodeResponse(APIErrorResponse{
+					Code:       serr.ErrorCode(),
+					Message:    serr.ErrorMessage(),
+					BucketName: bucket,
+					Key:        object,
+					Resource:   r.URL.Path,
+					RequestID:  w.Header().Get(xhttp.AmzRequestID),
+					HostID:     globalDeploymentID,
+				})
+				writeResponse(w, serr.HTTPStatusCode(), encodedErrorResponse, mimeXML)
+			} else {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			}
+			return
 		}
-		return
-	}
+	*/
 	/*
 		if err = s3Select.Open(getObject); err != nil {
 			if serr, ok := err.(s3select.SelectError); ok {
@@ -514,30 +517,43 @@ func (api objectAPIHandlers) GetCustomObjectContentHandler(w http.ResponseWriter
 
 	buf := new(bytes.Buffer)
 	buf.Reset()
-	//buf.WriteString("OK\n")
-	buf.WriteString("Bucket: " + objInfo.Bucket + "\n")
-	buf.WriteString("Key: " + objInfo.Name + "\n")
-	buf.WriteString("ETag: " + objInfo.ETag + "\n")
-	//buf.ReadFrom(r.Body)
-	buf.WriteString("Request: " + body.String() + "\n")
 
-	buf.WriteString("Expression: " + s3Select.GetExpression() + "\n")
-	//buf.WriteString("ExpressionType: " + s3select.ExpressionType + "\n")
+	//buf.WriteString("Bucket: " + objInfo.Bucket + "\n")
+	//buf.WriteString("Key: " + objInfo.Name + "\n")
+	//buf.WriteString("ETag: " + objInfo.ETag + "\n")
 
-	buf.WriteString("\n")
+	//buf.WriteString("Request: " + body.String() + "\n")
+	//buf.WriteString("Expression: " + s3Select.GetExpression() + "\n")
+
+	//buf.WriteString("\n")
 
 	r.Body = ioutil.NopCloser(strings.NewReader(body.String()))
-
 	dump, _ := httputil.DumpRequest(r, true)
-	buf.WriteString(string(dump))
+
+	//buf.WriteString(string(dump))
 
 	//var dump = &bytes.Buffer{}
 	//r.Body = ioutil.NopCloser(strings.NewReader(body.String()))
 	//r.Write(dump)
 	//buf.WriteString(dump.String())
 
-	buf.WriteString("\n")
+	//buf.WriteString("\n")
 	//buf.WriteString("End\n")
+
+	cmd := exec.Command("/build/ndp/dikeSQL")
+	cmd.Stdin = strings.NewReader(string(dump))
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	err1 := cmd.Run()
+	if err1 != nil {
+		buf.WriteString("Terminated with error: ")
+		buf.WriteString(stderr.String())
+	} else {
+		buf.WriteString(stdout.String())
+	}
 
 	writer.SendRecord(buf)
 	writer.Finish(-1, -1)
