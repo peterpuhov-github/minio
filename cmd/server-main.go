@@ -427,7 +427,7 @@ func serverMain(ctx *cli.Context) {
 
 	if !globalCLIContext.Quiet {
 		// Check for new updates from dl.min.io.
-		checkUpdate(getMinioMode())
+		//checkUpdate(getMinioMode())
 	}
 
 	if !globalActiveCred.IsValid() && globalIsDistErasure {

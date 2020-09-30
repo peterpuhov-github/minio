@@ -565,6 +565,8 @@ func (api objectAPIHandlers) GetCustomObjectContentHandler(w http.ResponseWriter
 	var errStdout, errStderr error
 	stdoutIn, _ := cmd.StdoutPipe()
 	stderrIn, _ := cmd.StderrPipe()
+
+	cmd.Stdin = strings.NewReader(string(dump))
 	err = cmd.Start()
 	if err != nil {
 		//log.Fatalf("cmd.Start() failed with '%s'\n", err)
