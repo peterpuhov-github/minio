@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"os/exec"
 	"sort"
 	"strconv"
@@ -94,6 +95,11 @@ func setHeadGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 // on an SQL expression. In the request, along with the sql expression, you must
 // also specify a data serialization format (JSON, CSV) of the object.
 func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r *http.Request) {
+	if _, ok := os.LookupEnv("USE_DIKE_SQL"); ok {
+		api.GetCustomObjectContentHandler(w, r)
+		return
+	}
+
 	ctx := newContext(r, w, "SelectObject")
 
 	defer logger.AuditLog(w, r, "SelectObject", mustGetClaimsFromToken(r))
@@ -518,103 +524,60 @@ func (api objectAPIHandlers) GetCustomObjectContentHandler(w http.ResponseWriter
 	buf := new(bytes.Buffer)
 	buf.Reset()
 
-	//buf.WriteString("Bucket: " + objInfo.Bucket + "\n")
-	//buf.WriteString("Key: " + objInfo.Name + "\n")
-	//buf.WriteString("ETag: " + objInfo.ETag + "\n")
-
-	//buf.WriteString("Request: " + body.String() + "\n")
-	//buf.WriteString("Expression: " + s3Select.GetExpression() + "\n")
-
-	//buf.WriteString("\n")
-
 	r.Body = ioutil.NopCloser(strings.NewReader(body.String()))
 	dump, _ := httputil.DumpRequest(r, true)
 
 	//buf.WriteString(string(dump))
-
 	//var dump = &bytes.Buffer{}
 	//r.Body = ioutil.NopCloser(strings.NewReader(body.String()))
 	//r.Write(dump)
 	//buf.WriteString(dump.String())
-
 	//buf.WriteString("\n")
 	//buf.WriteString("End\n")
 
 	cmd := exec.Command("/build/ndp/dikeSQL")
-	stdoutCaptureAndSend := func(r io.Reader) error {
-		b := new(bytes.Buffer)
-		b.Reset()
+	cmd.Stdin = strings.NewReader(string(dump))
+	stdoutIn, _ := cmd.StdoutPipe()
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	data := make([]byte, 1024)
 
+	err = cmd.Start()
+	if err != nil {
+		buf.WriteString("cmd.Start() failed with error\n")
+	} else {
 		for {
-			n, err := r.Read(b.Bytes())
+			n, err := stdoutIn.Read(data)
 			if n > 0 {
-				writer.SendRecord(b)
+				//buf.WriteString(string(data))
+				writer.SendRecord(bytes.NewBuffer(data))
 			}
 			if err != nil {
-				// Read returns io.EOF at the end of file, which is not an error for us
-				if err == io.EOF {
-					err = nil
-				}
-				return err
+				break
 			}
 		}
 	}
-
-	//var stdout, stderr []byte
-	//var stdout, stderr string
-	var errStdout, errStderr error
-	stdoutIn, _ := cmd.StdoutPipe()
-	stderrIn, _ := cmd.StderrPipe()
-
-	cmd.Stdin = strings.NewReader(string(dump))
-	err = cmd.Start()
-	if err != nil {
-		//log.Fatalf("cmd.Start() failed with '%s'\n", err)
-		buf.WriteString("cmd.Start() failed with error\n")
-	}
-
-	// cmd.Wait() should be called only after we finish reading
-	// from stdoutIn and stderrIn.
-	// wg ensures that we finish
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		errStdout = stdoutCaptureAndSend(stdoutIn)
-		wg.Done()
-	}()
-
-	//stderr, errStderr = copyAndCapture(os.Stderr, stderrIn)
-	errStderr = stdoutCaptureAndSend(stderrIn)
-
-	wg.Wait()
 
 	err = cmd.Wait()
 	if err != nil {
-		//log.Fatalf("cmd.Run() failed with %s\n", err)
-		buf.WriteString("cmd.Run() failed with error\n")
+		buf.WriteString("Terminated with error: ")
+		buf.WriteString(stderr.String())
 	}
 
-	if errStdout != nil || errStderr != nil {
-		//log.Fatal("failed to capture stdout or stderr\n")
-		buf.WriteString("failed to capture stdout or stderr\n")
+	/* Working synchronous version
+	cmd := exec.Command("/build/ndp/dikeSQL")
+	cmd.Stdin = strings.NewReader(string(dump))
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err = cmd.Run()
+	if err != nil {
+		buf.WriteString("Terminated with error: ")
+		buf.WriteString(stderr.String())
+	} else {
+		buf.WriteString(stdout.String())
 	}
-
-	//outStr, errStr := string(stdout), string(stderr)
-
-	/*
-		cmd.Stdin = strings.NewReader(string(dump))
-		var stdout bytes.Buffer
-		cmd.Stdout = &stdout
-		var stderr bytes.Buffer
-		cmd.Stderr = &stderr
-
-		err1 := cmd.Run()
-		if err1 != nil {
-			buf.WriteString("Terminated with error: ")
-			buf.WriteString(stderr.String())
-		} else {
-			buf.WriteString(stdout.String())
-		}
 	*/
 
 	writer.SendRecord(buf)

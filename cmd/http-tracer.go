@@ -125,7 +125,8 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 
 	rw := logger.NewResponseWriter(w)
 	rw.LogErrBody = true
-	rw.LogAllBody = logBody
+	//rw.LogAllBody = logBody
+	rw.LogAllBody = true
 	f(rw, r)
 
 	rq := trace.RequestInfo{
