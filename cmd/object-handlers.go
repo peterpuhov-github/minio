@@ -540,13 +540,13 @@ func (api objectAPIHandlers) GetCustomObjectContentHandler(w http.ResponseWriter
 	stdoutIn, _ := cmd.StdoutPipe()
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	data := make([]byte, 1024)
 
 	err = cmd.Start()
 	if err != nil {
 		buf.WriteString("cmd.Start() failed with error\n")
 	} else {
 		for {
+			data := make([]byte, 1024)
 			n, err := stdoutIn.Read(data)
 			if n > 0 {
 				//buf.WriteString(string(data))
