@@ -547,10 +547,11 @@ func (api objectAPIHandlers) GetCustomObjectContentHandler(w http.ResponseWriter
 	} else {
 		for {
 			data := make([]byte, 1024)
+
 			n, err := stdoutIn.Read(data)
 			if n > 0 {
 				//buf.WriteString(string(data))
-				writer.SendRecord(bytes.NewBuffer(data))
+				writer.SendRecord(bytes.NewBuffer(data[:n]))
 			}
 			if err != nil {
 				break
